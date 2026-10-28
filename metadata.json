@@ -1,0 +1,6 @@
+{
+  "name": "Void Raider - On-Chain Space Shooter",
+  "description": "A high-octane 2D cyberpunk space shooter with zero-bloat Canvas 60 FPS physics, ZzFX procedural audio, and dual-mode Web3 token rewards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
