@@ -2,9 +2,9 @@ import { createThirdwebClient } from "thirdweb";
 import { inAppWallet } from "thirdweb/wallets";
 import { baseSepolia } from "thirdweb/chains";
 
-// Thirdweb Client ID from environment variable with fallback
+// Read Thirdweb Client ID strictly from environment variable
 export const THIRDWEB_CLIENT_ID =
-  (import.meta.env.VITE_THIRDWEB_CLIENT_ID as string) || "9e7d692dd5b03ca85a3c6df67db324b1";
+  (import.meta.env.VITE_THIRDWEB_CLIENT_ID as string) || "";
 
 export const thirdwebClient = createThirdwebClient({
   clientId: THIRDWEB_CLIENT_ID,
@@ -18,4 +18,3 @@ export const inAppGoogleWallet = inAppWallet({
 });
 
 export const defaultChain = baseSepolia;
-

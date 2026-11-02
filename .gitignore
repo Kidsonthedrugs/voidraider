@@ -4,6 +4,12 @@ dist/
 coverage/
 .DS_Store
 *.log
+
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
 .env*
 !.env.example
+
 .vercel

@@ -5,6 +5,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { VoidGameEngine, GameStats, PlayerHUDState } from '../game/engine';
+import { globalInputManager } from '../game/inputManager';
 import { Play, RotateCcw, Pause, Crosshair, Zap, Shield, Sparkles, Lock, ShieldAlert } from 'lucide-react';
 import { GoogleConnect } from './GoogleConnect';
 
@@ -30,6 +31,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onOpenDailyLimitModal,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<VoidGameEngine | null>(null);
 
   const [gameState, setGameState] = useState<'TITLE' | 'PLAYING' | 'PAUSED'>('TITLE');
@@ -94,6 +96,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       return;
     }
     if (!engineRef.current) return;
+    containerRef.current?.focus();
     setGameState('PLAYING');
     engineRef.current.start();
   };
@@ -115,6 +118,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       return;
     }
     if (!engineRef.current) return;
+    containerRef.current?.focus();
     setGameState('PLAYING');
     engineRef.current.start();
   };
@@ -148,7 +152,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   return (
-    <div className="relative w-full h-[620px] max-h-[80vh] bg-[#070b14] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center select-none">
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      onMouseDown={() => containerRef.current?.focus()}
+      className="relative w-full h-[620px] max-h-[80vh] bg-[#070b14] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center select-none outline-none focus:outline-none"
+    >
       {/* 2D Canvas Viewport */}
       <canvas
         ref={canvasRef}
