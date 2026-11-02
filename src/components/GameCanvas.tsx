@@ -5,14 +5,30 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { VoidGameEngine, GameStats, PlayerHUDState } from '../game/engine';
-import { Play, RotateCcw, Pause, Crosshair, Zap, Shield, Sparkles } from 'lucide-react';
+import { Play, RotateCcw, Pause, Crosshair, Zap, Shield, Sparkles, Lock, ShieldAlert } from 'lucide-react';
+import { GoogleConnect } from './GoogleConnect';
 
 interface GameCanvasProps {
   onGameOver: (stats: GameStats) => void;
   highScore: number;
+  walletAddress: string | null;
+  runsRemaining: number;
+  maxFreeRuns: number;
+  canPlay: boolean;
+  onStartRun: () => boolean;
+  onOpenDailyLimitModal: () => void;
 }
 
-export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, highScore }) => {
+export const GameCanvas: React.FC<GameCanvasProps> = ({
+  onGameOver,
+  highScore,
+  walletAddress,
+  runsRemaining,
+  maxFreeRuns,
+  canPlay,
+  onStartRun,
+  onOpenDailyLimitModal,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<VoidGameEngine | null>(null);
 
@@ -33,6 +49,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, highScore })
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const [touchActive, setTouchActive] = useState(false);
   const [touchPos, setTouchPos] = useState({ x: 0, y: 0 });
+
+  const truncatedAddress = walletAddress
+    ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+    : null;
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -64,6 +84,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, highScore })
   }, [highScore, onGameOver]);
 
   const handleStartGame = () => {
+    if (!canPlay) {
+      onOpenDailyLimitModal();
+      return;
+    }
+    const started = onStartRun();
+    if (!started) {
+      onOpenDailyLimitModal();
+      return;
+    }
     if (!engineRef.current) return;
     setGameState('PLAYING');
     engineRef.current.start();
@@ -76,6 +105,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, highScore })
   };
 
   const handleRestart = () => {
+    if (!canPlay) {
+      onOpenDailyLimitModal();
+      return;
+    }
+    const started = onStartRun();
+    if (!started) {
+      onOpenDailyLimitModal();
+      return;
+    }
     if (!engineRef.current) return;
     setGameState('PLAYING');
     engineRef.current.start();
@@ -123,7 +161,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, highScore })
           {/* Top Bar HUD */}
           <div className="flex items-center justify-between gap-4">
             {/* Health & Shield telemetry */}
-            <div className="flex flex-col gap-1.5 bg-slate-950/70 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-slate-800/80 min-w-[200px]">
+            <div className="flex flex-col gap-1.5 bg-slate-950/70 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-slate-800/80 min-w-[190px]">
               {/* Shield Bar */}
               <div className="flex items-center justify-between text-[11px] font-mono text-cyan-300">
                 <span className="flex items-center gap-1">
@@ -155,13 +193,25 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, highScore })
               </div>
             </div>
 
-            {/* Central Wave & Multiplier */}
-            <div className="flex flex-col items-center">
+            {/* Central Pilot In-App HUD & Wave Multiplier */}
+            <div className="flex flex-col items-center gap-1.5">
+              {/* Compact Styled In-App Address HUD */}
+              <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md border border-cyan-500/40 text-[11px] font-mono text-cyan-300 shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[10px] text-slate-400 font-medium">PILOT HUD:</span>
+                <span className="font-bold text-white tracking-wide">
+                  {truncatedAddress || '0xGUEST'}
+                </span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950/90 text-cyan-400 border border-cyan-800/60 hidden sm:inline">
+                  IN-APP
+                </span>
+              </div>
+
               <div className="px-3.5 py-1 rounded-lg bg-slate-900/90 border border-slate-800 text-xs font-mono text-slate-300 tracking-wider">
                 SECTOR WAVE <span className="text-cyan-400 font-bold">{hud.wave}</span>
               </div>
               {hud.combo > 1 && (
-                <div className="text-amber-400 text-xs font-mono font-bold mt-1 tracking-wide animate-bounce">
+                <div className="text-amber-400 text-xs font-mono font-bold tracking-wide animate-bounce">
                   {hud.combo}x COMBO MULTIPLIER
                 </div>
               )}
@@ -200,7 +250,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, highScore })
             </div>
           </div>
 
-          {/* Bottom On-Screen Mobile Touch Controls (Always available for touch testing) */}
+          {/* Bottom On-Screen Mobile Touch Controls */}
           <div className="pointer-events-auto flex items-end justify-between sm:hidden pb-2">
             {/* Virtual Thumb Joystick */}
             <div
@@ -249,40 +299,77 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ onGameOver, highScore })
         <div className="absolute inset-0 bg-[#070b14]/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
           <div className="max-w-md w-full flex flex-col items-center">
             {/* Cyber Emblem */}
-            <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-4 shadow-lg shadow-cyan-500/10">
-              <Crosshair className="w-7 h-7" />
+            <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-3 shadow-lg shadow-cyan-500/10">
+              <Crosshair className="w-6 h-6" />
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-1">
               VOID RAIDER
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mb-6 leading-relaxed">
-              Pilot your skirmisher through the hostile cyber-asteroid belt. Destroy rogue drones, collect $VOID crystal shards, and claim on-chain ERC-20 token rewards upon mission completion.
+            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+              Pilot your skirmisher through the hostile cyber-asteroid belt. Destroy rogue drones, collect $VOID crystal shards, and claim on-chain ERC-20 token rewards.
             </p>
 
-            {/* Controls Guide */}
-            <div className="w-full grid grid-cols-2 gap-3 mb-6 text-xs text-slate-300">
-              <div className="bg-slate-900/90 border border-slate-800 p-2.5 rounded-xl flex flex-col items-center text-center">
-                <span className="text-[10px] text-slate-500 font-mono mb-1">STEERING</span>
-                <span className="font-semibold text-white">WASD or Arrow Keys</span>
+            {/* Daily Run Status Badge */}
+            <div className="w-full flex items-center justify-between bg-slate-900/90 border border-slate-800 px-3.5 py-2 rounded-xl mb-3 text-xs font-mono">
+              <span className="text-slate-400">DAILY COMBAT RUNS:</span>
+              <span
+                className={`font-bold ${
+                  runsRemaining > 0 ? 'text-cyan-400' : 'text-rose-400'
+                }`}
+              >
+                {runsRemaining} / {maxFreeRuns} AVAILABLE
+              </span>
+            </div>
+
+            {/* Guest Sign-In Prompt to Save Progress */}
+            {!walletAddress && (
+              <div className="w-full bg-slate-950/80 border border-cyan-500/30 rounded-xl p-3 mb-3 flex flex-col items-center gap-2">
+                <div className="text-[11px] text-cyan-300 font-medium text-center">
+                  Sign in with Google to create an in-app wallet and save combat progress on-chain.
+                </div>
+                <GoogleConnect compact />
               </div>
-              <div className="bg-slate-900/90 border border-slate-800 p-2.5 rounded-xl flex flex-col items-center text-center">
-                <span className="text-[10px] text-slate-500 font-mono mb-1">TARGET & FIRE</span>
-                <span className="font-semibold text-white">Mouse Aim + Space / Click</span>
+            )}
+
+            {/* Controls Guide */}
+            <div className="w-full grid grid-cols-2 gap-2.5 mb-4 text-xs text-slate-300">
+              <div className="bg-slate-900/80 border border-slate-800 p-2 rounded-xl flex flex-col items-center text-center">
+                <span className="text-[10px] text-slate-500 font-mono">STEERING</span>
+                <span className="font-semibold text-white">WASD / Arrows</span>
+              </div>
+              <div className="bg-slate-900/80 border border-slate-800 p-2 rounded-xl flex flex-col items-center text-center">
+                <span className="text-[10px] text-slate-500 font-mono">TARGET & FIRE</span>
+                <span className="font-semibold text-white">Aim + Space / Click</span>
               </div>
             </div>
 
-            {/* Launch Button */}
-            <button
-              onClick={handleStartGame}
-              className="w-full py-3.5 px-6 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm tracking-wide transition-all shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Play className="w-4 h-4 fill-current" />
-              <span>LAUNCH COMBAT RUN</span>
-            </button>
+            {/* Launch / Locked Button */}
+            {canPlay ? (
+              <button
+                onClick={handleStartGame}
+                className="w-full py-3.5 px-6 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm tracking-wide transition-all shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                <span>LAUNCH COMBAT RUN ({runsRemaining} runs left)</span>
+              </button>
+            ) : (
+              <div className="w-full space-y-2">
+                <button
+                  onClick={onOpenDailyLimitModal}
+                  className="w-full py-3.5 px-6 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>DAILY LIMIT REACHED (0/{maxFreeRuns}) — CLICK TO UNLOCK</span>
+                </button>
+                <p className="text-[11px] text-amber-400/80 font-mono">
+                  Send testnet tokens to your in-app address to unlock more runs.
+                </p>
+              </div>
+            )}
 
             {highScore > 0 && (
-              <div className="mt-4 text-xs font-mono text-slate-500">
+              <div className="mt-3 text-xs font-mono text-slate-500">
                 CURRENT FLEET RECORD: <span className="text-amber-400 font-bold">{highScore.toLocaleString()}</span> PTS
               </div>
             )}

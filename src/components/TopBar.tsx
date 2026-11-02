@@ -3,12 +3,13 @@
  * Strictly adheres to 3-zone contract:
  * Zone 1: Wordmark
  * Zone 2: 4-5 single-line nav links
- * Zone 3: 1 primary action (Wallet Connect / Status)
+ * Zone 3: 1 primary action (Google In-App Wallet Connect / Status) + Audio & Balance
  */
 
 import React from 'react';
-import { Volume2, VolumeX, Wallet, ShieldAlert, Cpu } from 'lucide-react';
+import { Volume2, VolumeX, Wallet, Settings2 } from 'lucide-react';
 import { toggleMute, getMuteState } from '../game/zzfx';
+import { GoogleConnect } from './GoogleConnect';
 
 interface TopBarProps {
   activeTab: 'game' | 'leaderboard' | 'contract' | 'docs';
@@ -32,16 +33,12 @@ export const TopBar: React.FC<TopBarProps> = ({
   onDisconnect,
 }) => {
   const [muted, setMuted] = React.useState(getMuteState());
-  const [walletDropdownOpen, setWalletDropdownOpen] = React.useState(false);
+  const [altMenuOpen, setAltMenuOpen] = React.useState(false);
 
   const handleToggleSound = () => {
     const isNowMuted = toggleMute();
     setMuted(isNowMuted);
   };
-
-  const truncatedAddress = walletAddress
-    ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-    : null;
 
   return (
     <header className="w-full bg-[#090d16] border-b border-slate-800/80 px-6 py-3.5 z-40 relative">
@@ -49,7 +46,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {/* Zone 1: Brand Wordmark */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="w-8 h-8 rounded-lg bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
-            <Cpu className="w-4 h-4" />
+            <span className="font-mono text-sm">VR</span>
           </div>
           <button
             onClick={() => setActiveTab('game')}
@@ -106,7 +103,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         </nav>
 
-        {/* Zone 3: Wallet Action & Audio Control */}
+        {/* Zone 3: Google In-App Wallet Action & Audio Control */}
         <div className="flex items-center gap-3 shrink-0">
           {/* Audio toggle button */}
           <button
@@ -117,63 +114,52 @@ export const TopBar: React.FC<TopBarProps> = ({
             {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
 
-          {/* Token Balance Pill-free Readout */}
+          {/* Token Balance Pill */}
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300">
             <span className="text-amber-400 font-mono font-bold">{tokenBalance}</span>
             <span className="text-slate-400 font-medium">$VOID</span>
           </div>
 
-          {/* Wallet Menu */}
-          <div className="relative">
-            {walletAddress ? (
-              <button
-                onClick={() => setWalletDropdownOpen(!walletDropdownOpen)}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-900 border border-cyan-500/30 text-xs font-mono text-cyan-300 hover:bg-slate-800/80 transition-colors whitespace-nowrap cursor-pointer"
-              >
-                <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                <span>{truncatedAddress}</span>
-                <span className="text-[10px] text-slate-400 hidden sm:inline">
-                  {isSimulated ? '(Testnet Sim)' : '(EVM)'}
-                </span>
-              </button>
-            ) : (
-              <button
-                onClick={() => setWalletDropdownOpen(!walletDropdownOpen)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors whitespace-nowrap cursor-pointer shadow-sm shadow-cyan-500/20"
-              >
-                <Wallet className="w-3.5 h-3.5" />
-                <span>Connect Wallet</span>
-              </button>
-            )}
+          {/* Clean Google In-App Wallet Connect / Status */}
+          <GoogleConnect compact />
 
-            {/* Wallet Options Dropdown */}
-            {walletDropdownOpen && (
+          {/* Alternate Wallet Options Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setAltMenuOpen(!altMenuOpen)}
+              className="p-2 text-slate-400 hover:text-slate-200 bg-slate-900/80 border border-slate-800 rounded-lg transition-colors cursor-pointer"
+              title="Alternative Wallets & Testnet Options"
+            >
+              <Settings2 className="w-4 h-4" />
+            </button>
+
+            {altMenuOpen && (
               <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-2 z-50 text-xs">
-                <div className="px-3 py-2 border-b border-slate-800 text-slate-400 text-[11px]">
-                  WALLET & TESTNET CONFIG
+                <div className="px-3 py-2 border-b border-slate-800 text-slate-400 text-[11px] font-mono">
+                  FALLBACK / DEV WALLETS
                 </div>
 
                 <div className="py-1">
                   <button
                     onClick={() => {
                       onConnectReal();
-                      setWalletDropdownOpen(false);
+                      setAltMenuOpen(false);
                     }}
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200 flex items-center justify-between cursor-pointer"
                   >
                     <span>Connect Injected EVM</span>
-                    <span className="text-[10px] text-cyan-400 font-mono">MetaMask / Base</span>
+                    <span className="text-[10px] text-cyan-400 font-mono">MetaMask</span>
                   </button>
 
                   <button
                     onClick={() => {
                       onConnectSimulated();
-                      setWalletDropdownOpen(false);
+                      setAltMenuOpen(false);
                     }}
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200 flex items-center justify-between cursor-pointer"
                   >
-                    <span>Generate Instant Testnet Wallet</span>
-                    <span className="text-[10px] text-amber-400 font-mono">No Extension</span>
+                    <span>Instant Burner Wallet</span>
+                    <span className="text-[10px] text-amber-400 font-mono">Local Sim</span>
                   </button>
                 </div>
 
@@ -182,11 +168,11 @@ export const TopBar: React.FC<TopBarProps> = ({
                     <button
                       onClick={() => {
                         onDisconnect();
-                        setWalletDropdownOpen(false);
+                        setAltMenuOpen(false);
                       }}
-                      className="w-full text-left px-3 py-1.5 rounded-lg text-rose-400 hover:bg-rose-950/40 text-xs cursor-pointer"
+                      className="w-full text-left px-3 py-1.5 rounded-lg text-rose-400 hover:bg-rose-950/40 text-xs cursor-pointer font-mono"
                     >
-                      Disconnect Wallet
+                      Reset Local Storage
                     </button>
                   </div>
                 )}

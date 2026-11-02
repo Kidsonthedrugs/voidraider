@@ -1,12 +1,13 @@
 /**
  * RewardModal Component
  * Game Over debrief & Web3 $VOID token reward claim dialog.
- * Decoupled from the 60 FPS loop; handles real or simulated on-chain mining.
+ * Decoupled from the 60 FPS loop; shows in-app wallet address for reward distribution.
  */
 
 import React, { useState } from 'react';
 import { GameStats } from '../game/engine';
-import { Sparkles, Trophy, CheckCircle2, ArrowRight, Loader2, Copy, ExternalLink, ShieldAlert } from 'lucide-react';
+import { Sparkles, Trophy, CheckCircle2, ArrowRight, Loader2, Copy, Wallet, Check } from 'lucide-react';
+import { GoogleConnect } from './GoogleConnect';
 
 interface RewardModalProps {
   stats: GameStats;
@@ -27,7 +28,8 @@ export const RewardModal: React.FC<RewardModalProps> = ({
 }) => {
   const [claimStatus, setClaimStatus] = useState<'IDLE' | 'MINING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [txHash, setTxHash] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedHash, setCopiedHash] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
 
   const scoreTokens = Math.floor(stats.score / 100);
   const totalTokens = stats.voidTokensEarned;
@@ -51,8 +53,15 @@ export const RewardModal: React.FC<RewardModalProps> = ({
   const handleCopyHash = () => {
     if (!txHash) return;
     navigator.clipboard.writeText(txHash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedHash(true);
+    setTimeout(() => setCopiedHash(false), 2000);
+  };
+
+  const handleCopyAddress = () => {
+    if (!walletAddress) return;
+    navigator.clipboard.writeText(walletAddress);
+    setCopiedAddress(true);
+    setTimeout(() => setCopiedAddress(false), 2000);
   };
 
   return (
@@ -74,7 +83,7 @@ export const RewardModal: React.FC<RewardModalProps> = ({
         </div>
 
         {/* Combat Stats Grid */}
-        <div className="grid grid-cols-3 gap-2.5 mb-5 text-center">
+        <div className="grid grid-cols-3 gap-2.5 mb-4 text-center">
           <div className="bg-slate-900/60 border border-slate-800/80 p-2.5 rounded-xl">
             <div className="text-[10px] text-slate-400 font-mono">SECTOR WAVE</div>
             <div className="text-base font-bold text-white font-mono mt-0.5">{stats.wave}</div>
@@ -91,12 +100,47 @@ export const RewardModal: React.FC<RewardModalProps> = ({
           </div>
         </div>
 
+        {/* In-App Wallet Address for Reward Distribution */}
+        <div className="bg-slate-900/90 border border-cyan-500/30 rounded-xl p-3.5 mb-4">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
+              <Wallet className="w-3.5 h-3.5 text-cyan-400" />
+              REWARD RECIPIENT IN-APP WALLET
+            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60">
+              {walletAddress ? 'READY TO MINT' : 'GUEST MODE'}
+            </span>
+          </div>
+
+          {walletAddress ? (
+            <div className="flex items-center justify-between bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 font-mono text-xs">
+              <span className="text-cyan-300 font-semibold truncate mr-2">{walletAddress}</span>
+              <button
+                onClick={handleCopyAddress}
+                className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                title="Copy in-app wallet address"
+              >
+                {copiedAddress ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2 pt-1 text-center">
+              <p className="text-xs text-amber-300">
+                Connect with Google to assign your {totalTokens} $VOID reward directly to your in-app wallet.
+              </p>
+              <div className="flex justify-center">
+                <GoogleConnect compact />
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Reward Computation Breakdown */}
-        <div className="bg-slate-900/90 border border-cyan-500/30 rounded-xl p-4 mb-5">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 mb-5">
           <div className="text-xs text-slate-300 font-semibold mb-2 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-400" />
-              CLAIMABLE ON-CHAIN REWARDS
+              EARNED ON-CHAIN REWARDS
             </span>
             <span className="text-[11px] text-cyan-400 font-mono">{networkName}</span>
           </div>
@@ -133,7 +177,7 @@ export const RewardModal: React.FC<RewardModalProps> = ({
               }`}
             >
               <Sparkles className="w-4 h-4 fill-current" />
-              <span>CLAIM {totalTokens} $VOID TO WALLET</span>
+              <span>CLAIM {totalTokens} $VOID TO IN-APP WALLET</span>
             </button>
 
             <button
@@ -150,7 +194,7 @@ export const RewardModal: React.FC<RewardModalProps> = ({
             <Loader2 className="w-6 h-6 text-cyan-400 animate-spin mx-auto" />
             <div className="text-sm font-semibold text-white">Minting Tokens on Testnet...</div>
             <p className="text-xs text-slate-400">
-              Broadcasting claimScoreReward({stats.score}, {totalTokens}) transaction to {networkName}
+              Distributing tokens to in-app wallet {walletAddress ? `${walletAddress.slice(0, 8)}...` : ''} on {networkName}
             </p>
           </div>
         )}
@@ -161,7 +205,7 @@ export const RewardModal: React.FC<RewardModalProps> = ({
               <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto" />
               <div className="text-sm font-bold text-emerald-300">Transaction Confirmed!</div>
               <p className="text-xs text-slate-300">
-                {totalTokens} $VOID successfully credited to your wallet address.
+                {totalTokens} $VOID successfully credited to your in-app wallet address.
               </p>
 
               {txHash && (
@@ -172,7 +216,7 @@ export const RewardModal: React.FC<RewardModalProps> = ({
                     className="p-1 text-slate-300 hover:text-white transition-colors cursor-pointer ml-2 shrink-0"
                     title="Copy Hash"
                   >
-                    <Copy className="w-3.5 h-3.5" />
+                    {copiedHash ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               )}

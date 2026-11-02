@@ -1,18 +1,21 @@
 /**
  * Void Raider - On-Chain Space Shooter
  * High-speed 2D Canvas engine with ZzFX procedural audio & Dual-Mode Web3 Token Rewards.
+ * Integrated with Thirdweb In-App Wallet (Google Auth) and Daily Run Limit Logic.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { TopBar } from './components/TopBar';
 import { GameCanvas } from './components/GameCanvas';
 import { RewardModal } from './components/RewardModal';
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { ContractDrawer } from './components/ContractDrawer';
 import { DocsModal } from './components/DocsModal';
+import { DailyLimitModal } from './components/DailyLimitModal';
 import { useGameRewards } from './hooks/useGameRewards';
+import { useDailyRuns } from './hooks/useDailyRuns';
 import { GameStats } from './game/engine';
-import { Sparkles, Trophy, Code2, Droplet, BookOpen, ExternalLink, ShieldCheck, Terminal, Cpu } from 'lucide-react';
+import { Code2, BookOpen, Terminal, Shield, Sparkles } from 'lucide-react';
 
 const STORAGE_KEY_HIGHSCORE = 'void_raider_highscore';
 
@@ -44,6 +47,9 @@ export default function App() {
     claimFaucet,
   } = useGameRewards();
 
+  // Daily Run Tracking (2 free runs per 24 hours per wallet address)
+  const dailyRuns = useDailyRuns(walletAddress);
+
   const handleGameOver = (stats: GameStats) => {
     setGameOverStats(stats);
     if (stats.score > highScore) {
@@ -60,7 +66,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
-      {/* 3-Zone Top Navigation */}
+      {/* 3-Zone Top Navigation with Google In-App Wallet */}
       <TopBar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -76,7 +82,16 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-6">
         {/* Active Combat Canvas Arena */}
         <div className="w-full">
-          <GameCanvas onGameOver={handleGameOver} highScore={highScore} />
+          <GameCanvas
+            onGameOver={handleGameOver}
+            highScore={highScore}
+            walletAddress={walletAddress}
+            runsRemaining={dailyRuns.runsRemaining}
+            maxFreeRuns={dailyRuns.maxFreeRuns}
+            canPlay={dailyRuns.canPlay}
+            onStartRun={dailyRuns.recordRunStart}
+            onOpenDailyLimitModal={dailyRuns.openLimitModal}
+          />
         </div>
 
         {/* 3-Column Fleet Telemetry & Quick Action Deck */}
@@ -87,11 +102,11 @@ export default function App() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-mono text-slate-400">PILOT IDENTITY</span>
                 <span className="text-[11px] font-mono text-cyan-400 font-medium">
-                  {isSimulated ? 'TESTNET SIM' : 'CONNECTED EVM'}
+                  {isSimulated ? 'TESTNET SIM' : 'THIRDWEB IN-APP'}
                 </span>
               </div>
               <div className="text-sm font-mono font-bold text-white truncate mb-1">
-                {walletAddress ? walletAddress : 'Not Connected'}
+                {walletAddress ? walletAddress : 'Guest Pilot'}
               </div>
               <div className="text-xs text-slate-400 font-mono">
                 Network: <span className="text-slate-200">{networkName}</span>
@@ -99,13 +114,14 @@ export default function App() {
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Auto-Provision:</span>
-              <button
-                onClick={connectSimulatedWallet}
-                className="text-cyan-400 hover:text-cyan-300 font-mono transition-colors cursor-pointer"
+              <span className="text-slate-500 font-mono">Daily Free Runs:</span>
+              <span
+                className={`font-mono font-bold ${
+                  dailyRuns.runsRemaining > 0 ? 'text-cyan-400' : 'text-amber-400'
+                }`}
               >
-                Reset Burner Wallet
-              </button>
+                {dailyRuns.runsRemaining} / {dailyRuns.maxFreeRuns} Left
+              </span>
             </div>
           </div>
 
@@ -141,7 +157,7 @@ export default function App() {
                 <span className="text-[11px] font-mono text-emerald-400 font-medium">FOUNDRY</span>
               </div>
               <p className="text-xs text-slate-300 mb-3 leading-relaxed">
-                Inspect the Solidity smart contract, testnet faucet, and 1-day sprint documentation.
+                Inspect the Solidity smart contract, testnet faucet, and sprint documentation.
               </p>
             </div>
 
@@ -211,7 +227,7 @@ export default function App() {
       <footer className="border-t border-slate-800/80 bg-[#090d16] py-4 px-6 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div>
-            Void Raider // 1-Day Web3 Game Sprint Architecture. 60 FPS HTML5 Canvas + ZzFX + Viem.
+            Void Raider // Web3 Arcade Shooter. HTML5 Canvas + ZzFX + Thirdweb In-App Wallet.
           </div>
           <div className="flex items-center gap-4 text-slate-400">
             <button
@@ -249,6 +265,18 @@ export default function App() {
           onPlayAgain={handlePlayAgain}
         />
       )}
+
+      {/* Daily Flight Limit Exceeded Modal */}
+      <DailyLimitModal
+        isOpen={dailyRuns.isLimitModalOpen}
+        onClose={dailyRuns.closeLimitModal}
+        walletAddress={walletAddress}
+        networkName={networkName}
+        onUnlockWithTokens={dailyRuns.unlockRunsWithTokens}
+        onClaimFaucet={claimFaucet}
+        tokenBalance={tokenBalance}
+        nextResetTimestamp={dailyRuns.nextResetTimestamp}
+      />
 
       {activeTab === 'leaderboard' && (
         <LeaderboardModal

@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useActiveAccount } from 'thirdweb/react';
 import { VOID_TOKEN_ADDRESS_DEFAULT } from '../web3/contract';
 
 export interface TransactionRecord {
@@ -68,10 +69,12 @@ const DEFAULT_LEADERBOARD: LeaderboardEntry[] = [
 ];
 
 export function useGameRewards() {
+  const activeAccount = useActiveAccount();
+
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [isSimulated, setIsSimulated] = useState(true);
-  const [networkName, setNetworkName] = useState('Base Sepolia (Simulated)');
+  const [networkName, setNetworkName] = useState('Base Sepolia (In-App)');
   const [tokenBalance, setTokenBalance] = useState(0);
   const [isClaiming, setIsClaiming] = useState(false);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
@@ -79,7 +82,7 @@ export function useGameRewards() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(DEFAULT_LEADERBOARD);
   const [contractAddress] = useState(VOID_TOKEN_ADDRESS_DEFAULT);
 
-  // Initialize from localStorage
+  // Initialize from localStorage or active Thirdweb in-app wallet
   useEffect(() => {
     try {
       const savedWallet = localStorage.getItem(STORAGE_KEY_WALLET);
@@ -87,26 +90,23 @@ export function useGameRewards() {
       const savedTxs = localStorage.getItem(STORAGE_KEY_TXS);
       const savedLeaderboard = localStorage.getItem(STORAGE_KEY_LEADERBOARD);
 
-      if (savedWallet) {
+      if (activeAccount?.address) {
+        setWalletAddress(activeAccount.address);
+        setIsWalletConnected(true);
+        setIsSimulated(false);
+        setNetworkName('Base Sepolia (Thirdweb In-App)');
+      } else if (savedWallet) {
         const data = JSON.parse(savedWallet);
         setWalletAddress(data.address);
         setIsWalletConnected(true);
         setIsSimulated(data.isSimulated);
         setNetworkName(data.network || (data.isSimulated ? 'Base Sepolia (Simulated)' : 'Ethereum'));
-      } else {
-        // Auto-provision instant simulated testnet wallet
-        const mockAddr = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-        setWalletAddress(mockAddr);
-        setIsWalletConnected(true);
-        setIsSimulated(true);
-        setNetworkName('Base Sepolia (Simulated)');
-        localStorage.setItem(STORAGE_KEY_WALLET, JSON.stringify({ address: mockAddr, isSimulated: true, network: 'Base Sepolia (Simulated)' }));
       }
 
       if (savedBalance) {
         setTokenBalance(Number(savedBalance) || 0);
       } else {
-        setTokenBalance(15); // welcome bonus tokens
+        setTokenBalance(25); // welcome bonus tokens
       }
 
       if (savedTxs) {
@@ -119,7 +119,27 @@ export function useGameRewards() {
     } catch {
       // Local storage fallback
     }
-  }, []);
+  }, [activeAccount?.address]);
+
+  // Sync Thirdweb In-App account immediately when connected
+  useEffect(() => {
+    if (activeAccount?.address) {
+      setWalletAddress(activeAccount.address);
+      setIsWalletConnected(true);
+      setIsSimulated(false);
+      setNetworkName('Base Sepolia (Thirdweb In-App)');
+      try {
+        localStorage.setItem(
+          STORAGE_KEY_WALLET,
+          JSON.stringify({
+            address: activeAccount.address,
+            isSimulated: false,
+            network: 'Base Sepolia (Thirdweb In-App)',
+          })
+        );
+      } catch {}
+    }
+  }, [activeAccount?.address]);
 
   // Sync token balance to local storage
   const updateBalance = useCallback((newBal: number) => {
@@ -134,7 +154,7 @@ export function useGameRewards() {
     const ethereum = (window as unknown as { ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<string[]> } }).ethereum;
 
     if (!ethereum) {
-      alert('No Web3 wallet extension found. Switching to simulated testnet wallet instead.');
+      alert('No Web3 wallet extension found. Use Google Login instead.');
       return false;
     }
 
