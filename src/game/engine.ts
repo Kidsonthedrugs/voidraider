@@ -4,6 +4,7 @@
  */
 
 import { soundEffects } from './zzfx';
+import { AssetLoader, defaultAssetLoader } from './assetLoader';
 
 export interface GameStats {
   score: number;
@@ -77,6 +78,7 @@ interface Asteroid {
   hp: number;
   tier: 1 | 2 | 3; // 3 = large, 2 = med, 1 = small
   color: string;
+  spriteIndex?: number;
 }
 
 interface EnemyDrone {
@@ -91,6 +93,7 @@ interface EnemyDrone {
   shootCooldown: number;
   shootInterval: number;
   angle: number;
+  spriteIndex?: number;
 }
 
 interface CrystalDrop {
@@ -197,6 +200,7 @@ export class VoidGameEngine {
   // Callbacks
   private onGameOverCallback?: (stats: GameStats) => void;
   private onHUDUpdateCallback?: (hud: PlayerHUDState) => void;
+  public assetLoader: AssetLoader;
 
   private lastTime = 0;
 
@@ -206,6 +210,7 @@ export class VoidGameEngine {
       onGameOver?: (stats: GameStats) => void;
       onHUDUpdate?: (hud: PlayerHUDState) => void;
       highScore?: number;
+      assetLoader?: AssetLoader;
     }
   ) {
     this.canvas = canvas;
@@ -216,6 +221,11 @@ export class VoidGameEngine {
     this.onGameOverCallback = callbacks.onGameOver;
     this.onHUDUpdateCallback = callbacks.onHUDUpdate;
     this.highScore = callbacks.highScore || 0;
+    this.assetLoader = callbacks.assetLoader || defaultAssetLoader;
+    // Asynchronously preload sprites ahead of time
+    this.assetLoader.preload().catch((err) => {
+      console.warn('[VoidGameEngine] Sprite preload encountered an error, fallbacks will be used:', err);
+    });
 
     this.resizeCanvas();
     this.initStars();
@@ -305,7 +315,9 @@ export class VoidGameEngine {
     this.touchFire = firing;
   }
 
-  public start() {
+  public async start() {
+    // Ensure all sprites are preloaded before beginning the frame loop
+    await this.assetLoader.preload().catch(() => {});
     this.reset();
     this.isRunning = true;
     this.isPaused = false;
@@ -413,7 +425,7 @@ export class VoidGameEngine {
     }
   }
 
-  private spawnAsteroid(tier: 1 | 2 | 3, originX?: number, originY?: number) {
+  private spawnAsteroid(tier: 1 | 2 | 3, originX?: number, originY?: number, spriteIndex?: number) {
     let x: number;
     let y: number;
 
@@ -452,6 +464,7 @@ export class VoidGameEngine {
       points.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
     }
 
+    const assignedSpriteIndex = spriteIndex !== undefined ? spriteIndex : this.assetLoader.getRandomIndex();
     this.asteroids.push({
       x,
       y,
@@ -464,10 +477,11 @@ export class VoidGameEngine {
       hp,
       tier,
       color: tier === 3 ? '#94a3b8' : tier === 2 ? '#64748b' : '#cbd5e1',
+      spriteIndex: assignedSpriteIndex,
     });
   }
 
-  private spawnDrone(type: 'scout' | 'interceptor') {
+  private spawnDrone(type: 'scout' | 'interceptor', spriteIndex?: number) {
     const edge = Math.floor(Math.random() * 4);
     let x = 0;
     let y = 0;
@@ -486,6 +500,7 @@ export class VoidGameEngine {
     }
 
     const hp = type === 'interceptor' ? 4 : 2;
+    const assignedSpriteIndex = spriteIndex !== undefined ? spriteIndex : this.assetLoader.getRandomIndex();
     this.drones.push({
       x,
       y,
@@ -498,6 +513,7 @@ export class VoidGameEngine {
       shootCooldown: 1.5 + Math.random() * 2,
       shootInterval: type === 'interceptor' ? 2.2 : 3.0,
       angle: 0,
+      spriteIndex: assignedSpriteIndex,
     });
   }
 
@@ -928,8 +944,8 @@ export class VoidGameEngine {
     // Spawn smaller debris chunks
     if (ast.tier > 1) {
       const nextTier = (ast.tier - 1) as 1 | 2;
-      this.spawnAsteroid(nextTier, ast.x, ast.y);
-      this.spawnAsteroid(nextTier, ast.x, ast.y);
+      this.spawnAsteroid(nextTier, ast.x, ast.y, ast.spriteIndex);
+      this.spawnAsteroid(nextTier, ast.x, ast.y, ast.spriteIndex);
     }
 
     // Drop $VOID crypto gems
@@ -1145,63 +1161,183 @@ export class VoidGameEngine {
       ctx.restore();
     }
 
-    // 5. Asteroids
+    // 5. Asteroids / Vibers
     for (const ast of this.asteroids) {
       ctx.save();
       ctx.translate(ast.x, ast.y);
       ctx.rotate(ast.rotation);
 
-      ctx.strokeStyle = ast.color;
-      ctx.lineWidth = 2;
-      ctx.fillStyle = '#111827';
+      const sprite = this.assetLoader.getImage(ast.spriteIndex);
+      if (sprite) {
+        // --- VibeViber PFP Avatar Rendering ---
+        // 1. Circular clipping
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, ast.radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
 
-      ctx.beginPath();
-      for (let i = 0; i < ast.points.length; i++) {
-        const pt = ast.points[i];
-        if (i === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
+        // 2. Square aspect-ratio preserved draw centered at origin, strictly matching collision radius
+        const imgW = sprite.naturalWidth || sprite.width;
+        const imgH = sprite.naturalHeight || sprite.height;
+        const cropSize = Math.min(imgW, imgH);
+        const sx = (imgW - cropSize) * 0.5;
+        const sy = (imgH - cropSize) * 0.5;
+        const diameter = ast.radius * 2;
+
+        ctx.drawImage(
+          sprite,
+          sx,
+          sy,
+          cropSize,
+          cropSize,
+          -ast.radius,
+          -ast.radius,
+          diameter,
+          diameter
+        );
+        ctx.restore();
+
+        // 3. Sleek token rim & cyber glow
+        ctx.strokeStyle = ast.color;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = ast.color;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(0, 0, ast.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 4. Subtle inner orbital accent ring
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, ast.radius * 0.82, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        // --- Procedural Fallback: Wireframe Asteroid Polygon ---
+        ctx.strokeStyle = ast.color;
+        ctx.lineWidth = 2;
+        ctx.fillStyle = '#111827';
+
+        ctx.beginPath();
+        for (let i = 0; i < ast.points.length; i++) {
+          const pt = ast.points[i];
+          if (i === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Asteroid craters/surface detail
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(ast.radius * 0.3, -ast.radius * 0.2, ast.radius * 0.22, 0, Math.PI * 2);
+        ctx.stroke();
       }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Asteroid craters/surface detail
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(ast.radius * 0.3, -ast.radius * 0.2, ast.radius * 0.22, 0, Math.PI * 2);
-      ctx.stroke();
 
       ctx.restore();
     }
 
-    // 6. Enemy Drones
+    // 6. Enemy Drones / Pilot Targets
     for (const drone of this.drones) {
       ctx.save();
       ctx.translate(drone.x, drone.y);
       ctx.rotate(drone.angle);
 
-      // Drone hull
-      ctx.shadowColor = '#f43f5e';
-      ctx.shadowBlur = 10;
-      ctx.strokeStyle = '#f43f5e';
-      ctx.fillStyle = '#1e1b4b';
-      ctx.lineWidth = 2;
+      const sprite = this.assetLoader.getImage(drone.spriteIndex);
+      if (sprite) {
+        // --- VibeViber Hostile Pilot / Drone Rendering ---
+        const isInterceptor = drone.type === 'interceptor';
+        const ringColor = isInterceptor ? '#f43f5e' : '#fb923c';
 
-      ctx.beginPath();
-      ctx.moveTo(drone.radius, 0);
-      ctx.lineTo(-drone.radius * 0.8, -drone.radius * 0.8);
-      ctx.lineTo(-drone.radius * 0.4, 0);
-      ctx.lineTo(-drone.radius * 0.8, drone.radius * 0.8);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+        // 1. Circular clipping
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, drone.radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
 
-      // Drone optic eye
-      ctx.fillStyle = '#fb7185';
-      ctx.beginPath();
-      ctx.arc(drone.radius * 0.2, 0, 3, 0, Math.PI * 2);
-      ctx.fill();
+        // 2. Square aspect-ratio preserved draw centered at origin, strictly matching collision radius
+        const imgW = sprite.naturalWidth || sprite.width;
+        const imgH = sprite.naturalHeight || sprite.height;
+        const cropSize = Math.min(imgW, imgH);
+        const sx = (imgW - cropSize) * 0.5;
+        const sy = (imgH - cropSize) * 0.5;
+        const diameter = drone.radius * 2;
+
+        ctx.drawImage(
+          sprite,
+          sx,
+          sy,
+          cropSize,
+          cropSize,
+          -drone.radius,
+          -drone.radius,
+          diameter,
+          diameter
+        );
+        ctx.restore();
+
+        // 3. Cyber cockpit frame & hostile glow
+        ctx.shadowColor = ringColor;
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = ringColor;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, drone.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 4. Directional cannon / reticle pointer aligned with drone facing angle (+X)
+        ctx.fillStyle = ringColor;
+        ctx.beginPath();
+        ctx.moveTo(drone.radius + 4, 0);
+        ctx.lineTo(drone.radius - 2, -3.5);
+        ctx.lineTo(drone.radius - 2, 3.5);
+        ctx.closePath();
+        ctx.fill();
+
+        // 5. HP ring arc if damaged
+        if (drone.hp < drone.maxHp) {
+          const hpPct = drone.hp / drone.maxHp;
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, drone.radius + 3.5, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.strokeStyle = ringColor;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, drone.radius + 3.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hpPct);
+          ctx.stroke();
+        }
+      } else {
+        // --- Procedural Fallback: Original Enemy Drone Wireframe ---
+        ctx.shadowColor = '#f43f5e';
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = '#f43f5e';
+        ctx.fillStyle = '#1e1b4b';
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.moveTo(drone.radius, 0);
+        ctx.lineTo(-drone.radius * 0.8, -drone.radius * 0.8);
+        ctx.lineTo(-drone.radius * 0.4, 0);
+        ctx.lineTo(-drone.radius * 0.8, drone.radius * 0.8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Drone optic eye
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath();
+        ctx.arc(drone.radius * 0.2, 0, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       ctx.restore();
     }

@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
+    "download-assets": "node scripts/download_assets.mjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
